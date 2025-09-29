@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         Int           @id @default(autoincrement())
+  name       String
+  email      String        @unique
+  password   String
+  number     String?
+  bio        String?
+  avatar     String?
+  createdAt  DateTime      @default(now())
+
+  groups     GroupMember[]
+  adminIn    GroupAdmin[]
+  messages   Message[]
+  ownedGroups Group[]     @relation("GroupOwner")
+  contacts   Contact[] @relation("UserContacts")
+
+  // 👇 Контакты, где этот пользователь — сам контакт
+  contactOf  Contact[] @relation("ContactUsers")
+
+  MessageRead MessageRead[]
+
+  Caller Call[] @relation("CallerCalls")
+
+  Call Call[] @relation("ReceiverCalls")
+}
+
+model Contact {
+  id          Int    @id @default(autoincrement())
+  userId      Int
+  contactId   Int
+  customName  String
+  createdAt   DateTime @default(now())
+
+  // 👇 Владелец контакта (тот, кто добавил контакт)
+  user    User @relation("UserContacts", fields: [userId], references: [id])
+
+  contact User @relation("ContactUsers", fields: [contactId], references: [id])
+
+  @@unique([userId, contactId])
+}
+
+model Call {
+  id          Int       @id @default(autoincrement())
+  callerId    Int
+  receiverId  Int
+  callType    String    // 'audio' | 'video'
+  status      String    // 'pending' | 'accepted' | 'rejected' | 'ended' | 'missed'
+  startedAt   DateTime? @map("started_at")
+  endedAt     DateTime? @map("ended_at")
+  duration    Int?      // in seconds
+
+  caller      User      @relation("CallerCalls", fields: [callerId], references: [id])
+  receiver    User      @relation("ReceiverCalls", fields: [receiverId], references: [id])
+
+  @@map("calls")
+}
+
+model Group {
+  id            Int           @id @default(autoincrement())
+  name          String
+  username      String?       @unique
+  avatarUrl     String?
+  ownerId       Int
+  owner         User          @relation("GroupOwner", fields: [ownerId], references: [id])
+  createdAt     DateTime      @default(now())
+  isChat        Boolean       @default(false)
+  isPrivate     Boolean       @default(false)
+
+  members       GroupMember[]
+  admins        GroupAdmin[]
+  messages      Message[]
+}
+
+model GroupMember {
+  id        Int     @id @default(autoincrement())
+  userId    Int
+  groupId   Int
+  user      User    @relation(fields: [userId], references: [id])
+  group     Group   @relation(fields: [groupId], references: [id])
+
+  @@unique([userId, groupId])
+}
+
+model GroupAdmin {
+  id        Int     @id @default(autoincrement())
+  userId    Int
+  groupId   Int
+  user      User    @relation(fields: [userId], references: [id])
+  group     Group   @relation(fields: [groupId], references: [id])
+
+  @@unique([userId, groupId])
+}
+
+model Message {
+  id        Int       @id @default(autoincrement())
+  content   String
+  userId    Int
+  groupId   Int
+  user      User      @relation(fields: [userId], references: [id])
+  group     Group     @relation(fields: [groupId], references: [id])
+  createdAt DateTime  @default(now())
+
+  MessageRead MessageRead[]
+  attachments Attachment[] // Добавляем связь с вложениями
+}
+
+model Attachment {
+  id        Int      @id @default(autoincrement())
+  messageId Int
+  type      String   // 'image', 'video', 'document', 'voice'
+  url       String
+  pathname  String?
+  filename  String?
+  size      Int?
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id])
+}
+
+model MessageRead {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  messageId Int
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  message Message @relation(fields: [messageId], references: [id])
+
+  @@unique([userId, messageId])
+}
